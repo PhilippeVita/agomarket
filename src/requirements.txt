@@ -1,6 +1,6 @@
 pandas
 minio
-psycopg2-binary
+psycopg
 python-dotenv
 requests
 boto3
