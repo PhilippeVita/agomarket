@@ -1,0 +1,65 @@
+# --- Environnements Python ---
+venv/
+__pycache__/
+*.pyc
+
+# --- Environnements & secrets ---
+.env
+.env.*
+*.key
+*.pem
+
+# --- Données locales ---
+datalake/bronze/
+datalake/silver/
+datalake/gold/
+
+# DWH metadata
+dwh/core/metadata/
+
+# --- Bases de données locales ---
+*.db
+*.sqlite
+dwh/engines/postgresql/data/
+dwh/engines/mysql/data/
+dwh/engines/oracle/data/
+dwh/engines/hana/data/
+dwh/engines/bigquery/data/
+
+# --- Logs & fichiers temporaires ---
+logs/
+*.log
+*.tmp
+*.zip
+*.tar.gz
+*.7z    
+*.bak
+*.backup
+*.swp   
+
+# --- OS & IDE ---
+.DS_Store
+.idea/
+.vscode/
+
+# --- Docker ---
+*.pid
+docker/*.pid
+docker/*.log
+
+# --- Airflow ---
+airflow/logs/
+airflow/plugins/__pycache__/
+airflow/dags/__pycache__/
+
+# --- Tests ---
+tests/__pycache__/
+tests/data/
+tests/fixtures/
+tests/output/   
+
+# --- Documentation personnelle ---
+documentation/personal/
+
+# --- Configurations locales ---
+infrastructure/locale/

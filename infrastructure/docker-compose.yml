@@ -1,0 +1,102 @@
+#---------------------------------------------------------------------------
+# Script d'infrastructure pour le projet Agomarket
+# Ce script utilise Docker Compose pour orchestrer les services ci-dessous :
+# --------------------------------------------------------------------------
+
+services:
+
+# Data Warehouse (PostgreSQL)
+  agomarket-dwh:
+    image: postgres:16
+    container_name: agomarket-dwh
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: agomarket
+      POSTGRES_PASSWORD: agomarket-pwd
+      POSTGRES_DB: agomarket-dwh
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - D:\Data\Engineering\agoragom\agomarket\dwh\engines\postgresql\data:/var/lib/postgresql/data
+      - D:\Data\Engineering\agoragom\agomarket\dwh\engines\postgresql\init:/docker-entrypoint-initdb.d
+
+    networks:
+      - agomarket-network
+
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $POSTGRES_USER -d $POSTGRES_DB']
+      interval: 10s 
+      timeout: 5s 
+      retries: 5
+
+
+# Data Lake (MinIO)
+  agomarket-datalake:
+    image: minio/minio:latest
+    container_name: agomarket-datalake
+
+    command: >
+      minio server /data --console-address ":9001"
+
+    environment:
+      MINIO_ROOT_USER: agomarket
+      MINIO_ROOT_PASSWORD: agomarket-minio-pwd
+
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+    volumes:
+      - D:/Data/Engineering/agoragom/agomarket/datalake:/data
+
+    networks:
+      - agomarket-network
+
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+# API RESTful (FastAPI)
+  agomarket-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+
+    image: agomarket-api:latest
+    container_name: agomarket-api
+
+    environment:
+      DWH_DB_HOST: agomarket-dwh
+      DWH_DB_PORT: 5432
+      DWH_DB_USER: agomarket
+      DWH_DB_PASSWORD: agomarket-pwd
+      DWH_DB_NAME: agomarket-dwh
+      MINIO_ENDPOINT: http://agomarket-datalake:9000
+      MINIO_ACCESS_KEY: agomarket
+      MINIO_SECRET_KEY: agomarket-minio-pwd
+
+    ports:
+      - "8000:8000"
+
+    depends_on: 
+      agomarket-dwh:
+        condition: service_healthy
+      agomarket-datalake:
+        condition: service_healthy
+
+    networks:
+      - agomarket-network
+
+
+# --------------------------------------------------------------------------
+# Network Configuration
+# --------------------------------------------------------------------------
+networks:
+  agomarket-network:
+    driver: bridge
