@@ -1,8 +1,3 @@
-#---------------------------------------------------------------------------
-# Script d'infrastructure pour le projet Agomarket
-# Ce script utilise Docker Compose pour orchestrer les services ci-dessous :
-# --------------------------------------------------------------------------
-
 services:
 
 # Data Warehouse (PostgreSQL)
@@ -20,8 +15,8 @@ services:
       - "5433:5432"
 
     volumes:
-      - D:\Data\Engineering\agoragom\agomarket\dwh\engines\postgresql\data:/var/lib/postgresql/data
-      - D:\Data\Engineering\agoragom\agomarket\dwh\engines\postgresql\init:/docker-entrypoint-initdb.d
+      - D:/Data/Engineering/agoragom/agomarket/dwh/engines/postgresql/data:/var/lib/postgresql/data
+      - D:/Data/Engineering/agoragom/agomarket/dwh/engines/postgresql/init:/docker-entrypoint-initdb.d
 
     networks:
       - agomarket-network
@@ -90,6 +85,22 @@ services:
       agomarket-datalake:
         condition: service_healthy
 
+    networks:
+      - agomarket-network
+
+
+# --------------------------------------------------------------------------
+# MinIO Initialization Service (creation des buckets)
+# --------------------------------------------------------------------------
+  agomarket-buckets:
+    image: minio/mc
+    container_name: agomarket-buckets
+    depends_on:
+      agomarket-datalake:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    volumes:
+      - ./infrastructure/minio:/init
     networks:
       - agomarket-network
 
