@@ -1,0 +1,162 @@
+name: agomarket
+
+services:
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL (Data Warehouse)
+  # --------------------------------------------------------------------------
+  agomarket-dwh:
+    image: postgres:16
+    container_name: agomarket-dwh
+    restart: always
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    ports:
+      - "${POSTGRES_PORT}:5432"
+
+    volumes:
+      - ./dwh/data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - agomarket-network
+
+
+  # --------------------------------------------------------------------------
+  # MinIO (Data Lake)
+  # --------------------------------------------------------------------------
+  agomarket-datalake:
+    image: minio/minio:latest
+    container_name: agomarket-datalake
+    restart: always
+
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+
+    command: server /data --console-address ":9001"
+
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "9001:9001"
+
+    volumes:
+      - ./datalake/data:/data
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - agomarket-network
+
+
+  # --------------------------------------------------------------------------
+  # Airflow
+  # --------------------------------------------------------------------------
+  agomarket-airflow:
+    image: agomarket/airflow:latest
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile.airflow
+    container_name: agomarket-airflow
+    restart: always
+
+    environment:
+      AIRFLOW_UID: ${AIRFLOW_UID}
+      AIRFLOW_GID: ${AIRFLOW_GID}
+      AIRFLOW_USER: ${AIRFLOW_USER}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD}
+      AIRFLOW_FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW_EXECUTOR: ${AIRFLOW_EXECUTOR}
+
+    ports:
+      - "${AIRFLOW_WEB_PORT}:8080"
+
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create --username ${AIRFLOW_USER} --password ${AIRFLOW_PASSWORD} --firstname Admin --lastname User --role Admin --email ${AIRFLOW_USER}@example.com &&
+        airflow webserver &
+        airflow scheduler
+      "
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    depends_on:
+      agomarket-dwh:
+        condition: service_healthy
+      agomarket-datalake:
+        condition: service_healthy
+
+    networks:
+      - agomarket-network
+
+
+  # --------------------------------------------------------------------------
+  # API REST (FastAPI)
+  # --------------------------------------------------------------------------
+  agomarket-api:
+    image: agomarket/fastapi:latest
+    build:
+      context: ./api
+      dockerfile: Dockerfile.api
+    container_name: agomarket-api
+    restart: always
+
+    environment:
+      DWH_DB_HOST: agomarket-dwh
+      DWH_DB_PORT: 5432
+      DWH_DB_USER: ${POSTGRES_USER}
+      DWH_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DWH_DB_NAME: ${POSTGRES_DB}
+
+      MINIO_ENDPOINT: agomarket-datalake:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+
+    ports:
+      - "8000:8000"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    depends_on:
+      agomarket-dwh:
+        condition: service_healthy
+      agomarket-datalake:
+        condition: service_healthy
+
+    networks:
+      - agomarket-network
+
+
+# --------------------------------------------------------------------------
+# VLAN Docker
+# --------------------------------------------------------------------------
+networks:
+  agomarket-network:
+    driver: bridge
